@@ -1,74 +1,61 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<title>MTDLP体験ゲーム</title>
-<style>
-  body { font-family: sans-serif; background: #fafafa; }
-  #output { 
-    background: #f2f6fc; 
-    border-radius: 8px; 
-    padding: 15px; 
-    min-height: 180px; 
-    white-space: pre-wrap;
-    margin-bottom: 12px;
-  }
-  #old-log {
-    font-size: 0.9em;
-    color: #777;
-    margin-top: 5px;
-    max-height: 200px;
-    overflow-y: auto;
-  }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MTDLP体験ゲーム</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Noto Sans JP", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif; background: #f7f7f9; margin: 0; }
+    .wrap { max-width: 980px; margin: 28px auto; padding: 0 16px; }
+    h1 { font-size: 22px; margin: 0 0 16px; }
+    .panel { background: #eef4ff; border: 1px solid #dbe7ff; border-radius: 12px; padding: 14px 16px; }
+    .question { background: #f2f6fc; border: 1px solid #e5eefc; min-height: 140px; white-space: pre-wrap; border-radius: 12px; padding: 14px 16px; }
+    .oldlog { margin-top: 10px; color: #6b7280; font-size: 14px; max-height: 240px; overflow-y: auto; white-space: pre-wrap; }
+    form { display: flex; gap: 8px; margin-top: 12px; }
+    input[type="text"] { flex: 1; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 16px; }
+    button { padding: 10px 14px; border: none; border-radius: 10px; font-weight: 600; }
+    .send { background: #2563eb; color: #fff; }
+    .reset { background: #eef2ff; }
+  </style>
 </head>
 <body>
-  <h2>MTDLP体験ゲーム</h2>
+  <div class="wrap">
+    <h1>MTDLP体験ゲーム</h1>
 
-  <div id="output"></div>
-  <div id="old-log"></div>
+    {# --- サーバーからの履歴を取得 --- #}
+    {% set last = history[-1] if history and history[-1].role == 'system' else None %}
+    {% set last_text = last.text if last else '' %}
 
-  <form id="form">
-    <input type="text" id="input" placeholder="ここに入力して送信" style="width:80%;">
-    <button type="submit">送信</button>
-    <button type="button" id="reset">リセット</button>
-  </form>
+    {# 「\nQ:」で最初に分割。前半=前の応答/説明、後半=質問 #}
+    {% set parts = last_text.split('\nQ:') %}
+    {% set beforeQ = parts[0].strip() %}
+    {% set question = ('Q:' + parts[1]).strip() if parts|length > 1 else last_text.strip() %}
 
-<script>
-let oldLog = "";
+    <div class="panel">
+      <div class="question">
+        {{ question }}
+      </div>
+      <div class="oldlog">
+        {# 直近以外の履歴（ユーザー発言も含めて） #}
+        {% for m in history[:-1] %}
+          {{ m.text }}
+          {% if not loop.last %}\n\n{% endif %}
+        {% endfor %}
+        {# 直近システム出力の前半（Q:の前）も過去ログに入れる #}
+        {% if beforeQ %}{% if history[:-1] %}\n\n{% endif %}{{ beforeQ }}{% endif %}
+      </div>
+    </div>
 
-document.getElementById("form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const input = document.getElementById("input").value;
-  const response = await fetch("/step", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ input }),
-  });
-  const data = await response.json();
+    <form method="POST">
+      <input type="text" name="user_input" placeholder="ここに入力して送信" autofocus />
+      <button class="send" type="submit">送信</button>
+      <a class="reset" href="{{ url_for('reset') }}"><button class="reset" type="button">リセット</button></a>
+    </form>
+  </div>
 
-  // 分離ロジック
-  let text = data.output.trim();
-  let parts = text.split(/\nQ:/);
-  let beforeQ = parts[0].trim();
-  let afterQ = parts.length > 1 ? "Q:" + parts[1] : "";
-
-  // 前の質問は履歴として下に残す
-  if (beforeQ) oldLog += beforeQ + "\n\n";
-
-  document.getElementById("old-log").innerText = oldLog.trim();
-  document.getElementById("output").innerText = afterQ || text;
-
-  document.getElementById("input").value = "";
-  window.scrollTo({ top: 0, behavior: "smooth" }); // 常に上部に戻る
-});
-
-document.getElementById("reset").addEventListener("click", async () => {
-  await fetch("/reset", { method: "POST" });
-  oldLog = "";
-  document.getElementById("output").innerText = "リセットしました。最初から再開します。";
-  document.getElementById("old-log").innerText = "";
-});
-</script>
+  <script>
+    // ページ遷移直後は必ず一番上に表示
+    window.scrollTo({ top: 0, behavior: "instant" });
+  </script>
 </body>
 </html>
