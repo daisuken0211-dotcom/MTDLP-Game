@@ -7,6 +7,10 @@ SCRIPT_PATH = "main.py"
 import builtins, threading, queue, time, runpy, importlib
 
 
+# --- 抑制したいフレーズ（必要に応じて追加可） ---
+SUPPRESS_PHRASES = ["無効な選択です"]
+
+
 class _CliBridge:
     def __init__(self):
         self.input_q = queue.Queue()
@@ -17,22 +21,20 @@ class _CliBridge:
         self._orig_input = builtins.input
         self._orig_print = builtins.print
 
-    # --- 入力パッチ ---
     def _patched_input(self, prompt=""):
+        # 入力プロンプトを必ず表示（空promptでも案内を出す）
         if prompt and prompt.strip():
             self.output_q.put(prompt)
         else:
             self.output_q.put("（入力待ちです。ここに答えを入力して送信してください）")
         return self.input_q.get()
 
-    # --- 出力パッチ ---
     def _patched_print(self, *args, **kwargs):
         end = kwargs.get("end", "\n")
         sep = kwargs.get("sep", " ")
         text = sep.join(str(a) for a in args) + end
         self.output_q.put(text)
 
-    # --- 実行スレッド ---
     def _run(self):
         try:
             builtins.input = self._patched_input
@@ -76,13 +78,24 @@ class _CliBridge:
         return "".join(buf)
 
 
-# === グローバルブリッジ ===
 _BRIDGE = _CliBridge()
 
 
 def initial_state():
-    # had_input で初回入力済みかを記録（無効メッセージ抑制用）
-    return {"started": False, "finished": False, "had_input": False}
+    # had_meaningful_input: 空白以外の最初の入力を済ませたか
+    return {"started": False, "finished": False, "had_meaningful_input": False}
+
+
+def _suppress_if_needed(text: str, allow_errors: bool):
+    """allow_errors=False の間は、特定フレーズをフィルタする"""
+    if allow_errors:
+        return text
+    lines = []
+    for ln in text.splitlines():
+        if any(p in ln for p in SUPPRESS_PHRASES):
+            continue
+        lines.append(ln)
+    return "\n".join(lines).strip()
 
 
 def step(state, user_input: str):
@@ -91,8 +104,7 @@ def step(state, user_input: str):
         _BRIDGE.start()
         state["started"] = True
 
-        # 起動直後：最初の print / input(prompt) が出るまで最大1.2秒待機
-        import time
+        # 最初の出力/プロンプトが現れるのを最大1.2秒待つ
         out = ""
         deadline = time.time() + 1.2
         while time.time() < deadline:
@@ -105,9 +117,8 @@ def step(state, user_input: str):
         if not out.strip():
             out = "（入力待ちです。ここに答えを入力して送信してください）"
 
-        # ★ 初回のみ「無効な選択です。」などを除去
-        lines = [ln for ln in out.splitlines() if "無効な選択です" not in ln]
-        out = "\n".join(lines).strip()
+        # ★ まだユーザーが有効入力をしていない間はエラーメッセージを抑制
+        out = _suppress_if_needed(out, allow_errors=state.get("had_meaningful_input", False))
 
         state["finished"] = _BRIDGE.finished
         return out, state
@@ -115,13 +126,16 @@ def step(state, user_input: str):
     # --- 通常処理 ---
     if user_input is not None:
         _BRIDGE.push(user_input)
+        # 空白以外の入力が来たら以降はエラーメッセージを出す
         if (user_input or "").strip():
-            state["had_input"] = True
+            state["had_meaningful_input"] = True
 
     out = _BRIDGE.drain(timeout=0.6)
-    state["finished"] = _BRIDGE.finished
 
+    # ★ まだ有効入力前なら、ここでも抑制を適用
+    out = _suppress_if_needed(out, allow_errors=state.get("had_meaningful_input", False))
+
+    state["finished"] = _BRIDGE.finished
     if state["finished"] and not out.strip():
         out = "＜シナリオ終了＞\nリセットで最初から再開できます。"
-
     return out, state
