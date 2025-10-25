@@ -1,5 +1,5 @@
 # engine.py — CLI bridge
-ENTRYPOINT_MODE = "function"
+ENTRYPOINT_MODE = "script"
 MODULE_NAME = "main"
 FUNCTION_NAME = "main"
 SCRIPT_PATH = "main.py"
