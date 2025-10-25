@@ -80,13 +80,28 @@ def step(state, user_input: str):
     if not state.get("started"):
         _BRIDGE.start()
         state["started"] = True
-        import time; time.sleep(0.25)   # ← 0.25〜0.4秒くらいに
-        out = _BRIDGE.drain(timeout=0.6)  # ← 少し長めに回収
+
+        # 起動直後：最初の print / input(prompt) が出るまで最大1.2秒粘る
+        import time
+        out = ""
+        deadline = time.time() + 1.2
+        while time.time() < deadline:
+            chunk = _BRIDGE.drain(timeout=0.25)  # 随時回収
+            if chunk and chunk.strip():
+                out = chunk
+                break
+            time.sleep(0.05)
+
+        if not out.strip():
+            # 何も拾えなかった場合でも無音にしない
+            out = "（入力待ちです。ここに答えを入力して送信してください）"
+
         state["finished"] = _BRIDGE.finished
         return out, state
+    # --- ここから先は現状のままでOK ---
     if user_input is not None:
         _BRIDGE.push(user_input)
-    out = _BRIDGE.drain()
+    out = _BRIDGE.drain(timeout=0.6)  # ← 応答回収も少し長めに
     state["finished"] = _BRIDGE.finished
     if state["finished"] and not out.strip():
         out = "＜シナリオ終了＞\nリセットで最初から再開できます。"
