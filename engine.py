@@ -6,6 +6,7 @@ SCRIPT_PATH = "main.py"
 
 import builtins, threading, queue, time, runpy, importlib
 
+
 class _CliBridge:
     def __init__(self):
         self.input_q = queue.Queue()
@@ -16,6 +17,7 @@ class _CliBridge:
         self._orig_input = builtins.input
         self._orig_print = builtins.print
 
+    # --- 入力パッチ ---
     def _patched_input(self, prompt=""):
         if prompt and prompt.strip():
             self.output_q.put(prompt)
@@ -23,12 +25,14 @@ class _CliBridge:
             self.output_q.put("（入力待ちです。ここに答えを入力して送信してください）")
         return self.input_q.get()
 
+    # --- 出力パッチ ---
     def _patched_print(self, *args, **kwargs):
         end = kwargs.get("end", "\n")
         sep = kwargs.get("sep", " ")
         text = sep.join(str(a) for a in args) + end
         self.output_q.put(text)
 
+    # --- 実行スレッド ---
     def _run(self):
         try:
             builtins.input = self._patched_input
@@ -71,38 +75,53 @@ class _CliBridge:
                 break
         return "".join(buf)
 
+
+# === グローバルブリッジ ===
 _BRIDGE = _CliBridge()
 
+
 def initial_state():
-    return {"started": False, "finished": False}
+    # had_input で初回入力済みかを記録（無効メッセージ抑制用）
+    return {"started": False, "finished": False, "had_input": False}
+
 
 def step(state, user_input: str):
+    # --- 起動時 ---
     if not state.get("started"):
         _BRIDGE.start()
         state["started"] = True
 
-        # 起動直後：最初の print / input(prompt) が出るまで最大1.2秒粘る
+        # 起動直後：最初の print / input(prompt) が出るまで最大1.2秒待機
         import time
         out = ""
         deadline = time.time() + 1.2
         while time.time() < deadline:
-            chunk = _BRIDGE.drain(timeout=0.25)  # 随時回収
+            chunk = _BRIDGE.drain(timeout=0.25)
             if chunk and chunk.strip():
                 out = chunk
                 break
             time.sleep(0.05)
 
         if not out.strip():
-            # 何も拾えなかった場合でも無音にしない
             out = "（入力待ちです。ここに答えを入力して送信してください）"
+
+        # ★ 初回のみ「無効な選択です。」などを除去
+        lines = [ln for ln in out.splitlines() if "無効な選択です" not in ln]
+        out = "\n".join(lines).strip()
 
         state["finished"] = _BRIDGE.finished
         return out, state
-    # --- ここから先は現状のままでOK ---
+
+    # --- 通常処理 ---
     if user_input is not None:
         _BRIDGE.push(user_input)
-    out = _BRIDGE.drain(timeout=0.6)  # ← 応答回収も少し長めに
+        if (user_input or "").strip():
+            state["had_input"] = True
+
+    out = _BRIDGE.drain(timeout=0.6)
     state["finished"] = _BRIDGE.finished
+
     if state["finished"] and not out.strip():
         out = "＜シナリオ終了＞\nリセットで最初から再開できます。"
+
     return out, state
