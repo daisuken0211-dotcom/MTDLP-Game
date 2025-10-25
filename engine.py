@@ -26,7 +26,7 @@ class _CliBridge:
         if prompt and prompt.strip():
             self.output_q.put(prompt)
         else:
-            self.output_q.put("（入力待ちです。ここに答えを入力して送信してください）")
+            self.output_q.put("（入力待ちです。最初にEnterを押してください。）")
         return self.input_q.get()
 
     def _patched_print(self, *args, **kwargs):
