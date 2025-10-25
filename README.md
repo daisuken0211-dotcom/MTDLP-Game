@@ -1,1 +1,1 @@
-# CLIゲームをそのままWeb公開（Render/Flaskブリッジ）\n\n1. このフォルダにあなたの元の .py をすべて入れる（編集不要）\n2. `engine.py` の設定を変更（入口関数またはスクリプトを指定）\n3. GitHubにアップロード → RenderでWeb Service（Free）を作成\n4. `print()` と `input()` がブラウザでそのまま動作します。
+# MTDLP体験ゲーム\n\n1. このフォルダにあなたの元の .py をすべて入れる（編集不要）\n2. `engine.py` の設定を変更（入口関数またはスクリプトを指定）\n3. GitHubにアップロード → RenderでWeb Service（Free）を作成\n4. `print()` と `input()` がブラウザでそのまま動作します。
