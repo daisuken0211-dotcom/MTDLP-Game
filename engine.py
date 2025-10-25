@@ -17,12 +17,11 @@ class _CliBridge:
         self._orig_print = builtins.print
 
     def _patched_input(self, prompt=""):
-    # 入力プロンプトを必ず画面に出す（promptが空でもフォールバック表示）
-    if prompt and prompt.strip():
-        self.output_q.put(prompt)
-    else:
-        self.output_q.put("（入力待ちです。ここに答えを入力して送信してください）")
-    return self.input_q.get()
+        if prompt and prompt.strip():
+            self.output_q.put(prompt)
+        else:
+            self.output_q.put("（入力待ちです。ここに答えを入力して送信してください）")
+        return self.input_q.get()
 
     def _patched_print(self, *args, **kwargs):
         end = kwargs.get("end", "\n")
