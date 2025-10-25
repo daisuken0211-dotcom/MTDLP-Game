@@ -17,9 +17,12 @@ class _CliBridge:
         self._orig_print = builtins.print
 
     def _patched_input(self, prompt=""):
-        if prompt:
-            self.output_q.put(prompt)
-        return self.input_q.get()
+    # 入力プロンプトを必ず画面に出す（promptが空でもフォールバック表示）
+    if prompt and prompt.strip():
+        self.output_q.put(prompt)
+    else:
+        self.output_q.put("（入力待ちです。ここに答えを入力して送信してください）")
+    return self.input_q.get()
 
     def _patched_print(self, *args, **kwargs):
         end = kwargs.get("end", "\n")
@@ -78,7 +81,8 @@ def step(state, user_input: str):
     if not state.get("started"):
         _BRIDGE.start()
         state["started"] = True
-        out = _BRIDGE.drain()
+        import time; time.sleep(0.25)   # ← 0.25〜0.4秒くらいに
+        out = _BRIDGE.drain(timeout=0.6)  # ← 少し長めに回収
         state["finished"] = _BRIDGE.finished
         return out, state
     if user_input is not None:
