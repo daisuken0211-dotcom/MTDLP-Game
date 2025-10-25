@@ -115,7 +115,7 @@ def step(state, user_input: str):
             time.sleep(0.05)
 
         if not out.strip():
-            out = "（入力待ちです。ここに答えを入力して送信してください）"
+            out = "（入力待ちです。最初にEnterを押してください。）"
 
         # ★ まだユーザーが有効入力をしていない間はエラーメッセージを抑制
         out = _suppress_if_needed(out, allow_errors=state.get("had_meaningful_input", False))
